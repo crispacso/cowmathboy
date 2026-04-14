@@ -7,14 +7,47 @@
 <link href="https://fonts.googleapis.com/css2?family=Rye&family=Fredoka+One&display=swap" rel="stylesheet">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body {
+html, body {
+  width:100%; height:100%;
   background:#1a0a00;
-  display:flex; align-items:flex-start; justify-content:center;
-  min-height:100vh; padding:16px 8px;
   font-family:'Fredoka One','Arial Rounded MT Bold',cursive;
 }
-#wrap { position:relative; width:100%; max-width:780px; }
-canvas { display:block; width:100%; height:auto; }
+body {
+  display:flex; align-items:center; justify-content:center;
+  min-height:100vh; padding:8px;
+}
+#wrap {
+  position:relative;
+  width:100%; max-width:780px;
+}
+canvas { display:block; width:100%; height:auto; touch-action:manipulation; }
+
+/* ── Portrait / rotate overlay ── */
+#rotateOverlay {
+  display:none;
+  position:fixed; inset:0; z-index:999;
+  background:#1a0800;
+  flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; padding:30px;
+}
+@media (orientation: portrait) {
+  #rotateOverlay { display:flex; }
+}
+#rotateCanvas { width:min(280px,80vw); height:auto; display:block; margin:0 auto 18px; }
+#rotateMsg {
+  font-family:'Rye',serif; font-size:clamp(18px,5vw,28px);
+  color:#FFD700; margin-bottom:10px;
+  text-shadow:2px 2px 0 #5a2a00;
+}
+#rotateHint {
+  font-size:clamp(13px,3.5vw,18px); color:#FFE4B5; line-height:1.5;
+}
+.rotate-icon { font-size:clamp(36px,10vw,54px); animation:rotatePhone 1.6s ease-in-out infinite; display:inline-block; }
+@keyframes rotatePhone {
+  0%,100%{transform:rotate(0deg)} 40%{transform:rotate(90deg)} 60%{transform:rotate(90deg)}
+}
+
+/* ── Game UI ── */
 #ui {
   position:absolute; top:0; left:0; right:0; bottom:0;
   display:none; flex-direction:column;
@@ -23,18 +56,18 @@ canvas { display:block; width:100%; height:auto; }
 }
 #answers {
   display:grid; grid-template-columns:1fr 1fr;
-  gap:14px; pointer-events:all; margin-top:10px;
+  gap:clamp(6px,2vw,14px); pointer-events:all; margin-top:8px;
+  width:clamp(260px,60%,500px);
 }
 .abtn {
   font-family:'Fredoka One',cursive;
-  font-size:28px; padding:14px 30px;
+  font-size:clamp(18px,3.5vw,28px); padding:clamp(8px,2vw,14px) clamp(12px,2.5vw,30px);
   background:#8B4513; color:#FFE4B5;
   border:4px solid #5C2E00;
   border-radius:10px; cursor:pointer;
   box-shadow:4px 4px 0 #3a1a00;
   transition:transform .08s, box-shadow .08s, background .1s;
-  min-width:130px; text-align:center;
-  position:relative;
+  min-width:100px; text-align:center;
 }
 .abtn:hover { background:#a05020; transform:translate(-2px,-2px); box-shadow:6px 6px 0 #3a1a00; }
 .abtn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 #3a1a00; }
@@ -42,6 +75,7 @@ canvas { display:block; width:100%; height:auto; }
 .abtn.wrong   { background:#aa2010; border-color:#7a0000; animation:shake .3s; }
 @keyframes popIn { 0%{transform:scale(1)} 50%{transform:scale(1.18)} 100%{transform:scale(1)} }
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)} }
+
 #msgOverlay {
   position:absolute; top:0; left:0; right:0; bottom:0;
   background:rgba(0,0,0,0.72);
@@ -50,17 +84,16 @@ canvas { display:block; width:100%; height:auto; }
   z-index:20; pointer-events:all;
 }
 #msgBox {
-  background:#2a1200;
-  border:6px solid #c8860a;
-  border-radius:18px; padding:30px 40px;
-  text-align:center; max-width:460px;
+  background:#2a1200; border:6px solid #c8860a;
+  border-radius:18px; padding:clamp(16px,3vw,30px) clamp(20px,4vw,40px);
+  text-align:center; max-width:90%;
   box-shadow:0 0 0 3px #2a1200, 0 0 0 8px rgba(200,134,10,0.2);
 }
-#msgTitle { font-family:'Rye',serif; font-size:30px; color:#FFD700; margin-bottom:12px; text-shadow:2px 2px 0 #5a2a00; }
-#msgSub   { font-size:18px; color:#FFE4B5; margin-bottom:20px; line-height:1.5; }
+#msgTitle { font-family:'Rye',serif; font-size:clamp(18px,4vw,30px); color:#FFD700; margin-bottom:10px; text-shadow:2px 2px 0 #5a2a00; }
+#msgSub   { font-size:clamp(13px,2.5vw,18px); color:#FFE4B5; margin-bottom:16px; line-height:1.5; white-space:pre-line; }
 #msgBtn {
   font-family:'Fredoka One',cursive;
-  font-size:20px; padding:12px 36px;
+  font-size:clamp(14px,2.5vw,20px); padding:10px 28px;
   background:#c8860a; color:#1a0800;
   border:4px solid #8a5a00; border-radius:10px;
   cursor:pointer; box-shadow:4px 4px 0 #5a3a00;
@@ -70,13 +103,20 @@ canvas { display:block; width:100%; height:auto; }
 #msgBtn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 #5a3a00; }
 #tinfo {
   background:#1a0800; border:2px solid #4a2a00;
-  font-size:11px; color:#8a5a20;
+  font-size:clamp(9px,1.8vw,11px); color:#8a5a20;
   text-align:center; padding:5px;
   font-family:'Fredoka One',cursive; letter-spacing:1px;
 }
 </style>
 </head>
 <body>
+<!-- ── Portrait / rotate overlay ── -->
+<div id="rotateOverlay">
+  <canvas id="rotateCanvas" width="280" height="200"></canvas>
+  <div id="rotateMsg">¡Gira la pantalla! 🤠</div>
+  <div id="rotateHint">CowMathBoy se juega<br>en modo horizontal<br><span class="rotate-icon">📱</span></div>
+</div>
+
 <div id="wrap">
   <canvas id="cv" width="780" height="360"></canvas>
   <!-- Answer buttons overlay -->
@@ -108,11 +148,70 @@ const W=780, H=360;
 let gs='start'; // start|playing|question|feedback|levelDone|gameOver|win
 let lv=1, lives=3, score=0, frame=0, scroll=0;
 let q=null, qAnswered=false;
-let correct=0; const NEED=5; // 5 correct per level
+let correct=0; const NEED=5;
 let feedback={active:false,correct:false,timer:0,chosen:-1};
 let parts=[];
-let horseAnim=0; // horse bobbing
+let horseAnim=0;
+let horseLaughing=0; // >0 = frames left laughing
 let lastWrong=0, levelWrong=0;
+
+// ── Rotate canvas horse ───────────────────────────
+const rc=document.getElementById('rotateCanvas');
+const rx2=rc.getContext('2d');
+function drawRotateHorse(){
+  rx2.clearRect(0,0,280,200);
+  const t=Date.now()/1000;
+  // Simple cute horse facing right, asking to rotate
+  const x=140, y=150;
+  // Shadow
+  rx2.fillStyle='rgba(0,0,0,0.18)';
+  rx2.beginPath(); rx2.ellipse(x,y+4,32,6,0,0,6.28); rx2.fill();
+  // Legs bounce
+  const lb=Math.sin(t*3)*6;
+  rx2.fillStyle='#5a3000';
+  for(const lx of [-18,-6,6,18]){
+    rx2.fillRect(x+lx-3,y-20+Math.abs(lb),6,20);
+    rx2.fillStyle='#3a1a00'; rx2.fillRect(x+lx-4,y-4,8,5); rx2.fillStyle='#5a3000';
+  }
+  // Body
+  rx2.fillStyle='#8B4513';
+  rx2.beginPath(); rx2.ellipse(x,y-28,38,18,0,0,6.28); rx2.fill();
+  rx2.fillStyle='#a05020';
+  rx2.beginPath(); rx2.ellipse(x-5,y-32,30,14,0,0,6.28); rx2.fill();
+  // Neck
+  rx2.fillStyle='#8B4513';
+  rx2.beginPath(); rx2.moveTo(x+22,y-40); rx2.lineTo(x+32,y-58); rx2.lineTo(x+40,y-54); rx2.lineTo(x+30,y-36); rx2.fill();
+  // Head
+  rx2.fillStyle='#8B4513';
+  rx2.beginPath(); rx2.ellipse(x+46,y-62,16,10,0.2,0,6.28); rx2.fill();
+  // Snout
+  rx2.fillStyle='#a05020';
+  rx2.beginPath(); rx2.ellipse(x+58,y-58,9,7,0,0,6.28); rx2.fill();
+  // Mouth open (asking)
+  rx2.fillStyle='#3a1000';
+  rx2.beginPath(); rx2.ellipse(x+62,y-54,5,4,0,0,6.28); rx2.fill();
+  // Teeth
+  rx2.fillStyle='#fff';
+  rx2.fillRect(x+58,y-57,4,4); rx2.fillRect(x+63,y-57,4,4);
+  // Eye (winking / big)
+  rx2.fillStyle='#fff'; rx2.beginPath(); rx2.ellipse(x+44,y-67,5,5,0,0,6.28); rx2.fill();
+  rx2.fillStyle='#1a0a00'; rx2.beginPath(); rx2.ellipse(x+45,y-67,3,3,0,0,6.28); rx2.fill();
+  rx2.fillStyle='#fff'; rx2.fillRect(x+45,y-69,2,2);
+  // Ear
+  rx2.fillStyle='#7a3a00';
+  rx2.beginPath(); rx2.moveTo(x+36,y-68); rx2.lineTo(x+40,y-80); rx2.lineTo(x+46,y-68); rx2.fill();
+  // Mane
+  rx2.fillStyle='#5a2a00';
+  for(let i=0;i<4;i++){ rx2.beginPath(); rx2.arc(x+24+i*4,y-54-i*3,5,0,6.28); rx2.fill(); }
+  // Tail
+  rx2.strokeStyle='#6b3a00'; rx2.lineWidth=5;
+  rx2.beginPath(); rx2.moveTo(x-38,y-28); rx2.quadraticCurveTo(x-58,y-8,x-52,y+12); rx2.stroke();
+  // Phone icon pointing right
+  rx2.fillStyle='#FFD700'; rx2.font="bold 14px 'Fredoka One',cursive";
+  rx2.textAlign='center'; rx2.fillText('¡Gírame! →',x,18);
+  requestAnimationFrame(drawRotateHorse);
+}
+drawRotateHorse();
 
 // ── Tables ──────────────────────────────────────
 function getTables(l){
@@ -344,8 +443,15 @@ function drawCowboy(x,y){
 // ── Horse ────────────────────────────────────────
 function drawHorse(x,y){
   horseAnim+=0.12;
-  const b=Math.sin(horseAnim)*5;
-  const legA=Math.sin(horseAnim)*18;
+  const laughing = horseLaughing>0;
+  // When laughing: faster bounce + mouth open + tears
+  const b = laughing
+    ? Math.sin(horseAnim*3)*9          // fast shake
+    : Math.sin(horseAnim)*5;
+  const legA = laughing
+    ? Math.sin(horseAnim*3)*25
+    : Math.sin(horseAnim)*18;
+  if(horseLaughing>0) horseLaughing--;
 
   // Shadow
   cx.fillStyle='rgba(0,0,0,0.2)';
@@ -385,11 +491,40 @@ function drawHorse(x,y){
   // Snout
   cx.fillStyle='#a05020';
   cx.beginPath(); cx.ellipse(x-64,y-52+b,10,7,-0.1,0,6.28); cx.fill();
-  // Nostril
-  cx.fillStyle='#3a1a00'; cx.beginPath(); cx.ellipse(x-68,y-50+b,3,2,0,0,6.28); cx.fill();
-  // Eye
-  cx.fillStyle='#1a0a00'; cx.beginPath(); cx.arc(x-48,y-60+b,3.5,0,6.28); cx.fill();
-  cx.fillStyle='#fff'; cx.beginPath(); cx.arc(x-47,y-61+b,1.2,0,6.28); cx.fill();
+
+  if(laughing){
+    // Open mouth laughing
+    cx.fillStyle='#3a1000';
+    cx.beginPath(); cx.ellipse(x-66,y-48+b,7,6,0,0,6.28); cx.fill();
+    // Teeth showing
+    cx.fillStyle='#fff';
+    cx.fillRect(x-71,y-53+b,5,5); cx.fillRect(x-65,y-53+b,5,5);
+    // Laugh tears
+    cx.fillStyle='rgba(120,200,255,0.9)';
+    cx.beginPath(); cx.ellipse(x-44,y-62+b,3,5,0.3,0,6.28); cx.fill();
+    cx.beginPath(); cx.ellipse(x-44,y-55+b,2,4,0.2,0,6.28); cx.fill();
+    // HA HA text bubble
+    cx.save();
+    cx.fillStyle='#fff'; cx.font="bold 11px 'Fredoka One',cursive";
+    cx.textAlign='center';
+    const ha=['HA','HA!','HEE'][Math.floor(horseAnim*2)%3];
+    cx.fillText(ha, x-52, y-78+b);
+    cx.restore();
+  } else {
+    // Normal nostril
+    cx.fillStyle='#3a1a00'; cx.beginPath(); cx.ellipse(x-68,y-50+b,3,2,0,0,6.28); cx.fill();
+  }
+
+  // Eye — squinting/X when laughing
+  if(laughing){
+    cx.strokeStyle='#1a0a00'; cx.lineWidth=2.5;
+    cx.beginPath(); cx.moveTo(x-51,y-63+b); cx.lineTo(x-45,y-57+b); cx.stroke();
+    cx.beginPath(); cx.moveTo(x-45,y-63+b); cx.lineTo(x-51,y-57+b); cx.stroke();
+  } else {
+    cx.fillStyle='#1a0a00'; cx.beginPath(); cx.arc(x-48,y-60+b,3.5,0,6.28); cx.fill();
+    cx.fillStyle='#fff'; cx.beginPath(); cx.arc(x-47,y-61+b,1.2,0,6.28); cx.fill();
+  }
+
   // Ear
   cx.fillStyle='#7a3a00'; cx.beginPath();
   cx.moveTo(x-42,y-62+b); cx.lineTo(x-38,y-74+b); cx.lineTo(x-34,y-62+b); cx.fill();
@@ -570,6 +705,7 @@ function handleAnswer(idx){
     playSound(false);
     levelWrong++;
     lives--;
+    horseLaughing = 130; // ~2 seconds of laughing
     // Highlight correct
     document.getElementById('a'+q.correctIdx).className='abtn correct';
   }
@@ -621,7 +757,7 @@ function playSound(ok){
 // ── Level flow ────────────────────────────────────
 function startGame(){
   lv=1; lives=3; score=0; correct=0; levelWrong=0; lastWrong=0; parts=[];
-  frame=0; scroll=0; gs='playing';
+  frame=0; scroll=0; horseLaughing=0; gs='playing';
   nextQuestion();
   updateTableInfo();
 }
