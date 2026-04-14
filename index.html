@@ -543,7 +543,129 @@ function drawHorse(x,y){
   rr(x-16,y-45+b,22,10,4,'#6b3500');
 }
 
-// ── Sign / Billboard ──────────────────────────────
+// ── Laugh overlay (big horse in foreground) ───────
+const LAUGH_TOTAL = 140; // frames total
+
+function drawLaughOverlay(){
+  if(horseLaughing<=0) return;
+  const progress = horseLaughing / LAUGH_TOTAL; // 1→0 as it fades
+
+  // Entrance: pop in during first 20 frames (progress > 0.86)
+  // Exit: fade out in last 30 frames (progress < 0.22)
+  let scale = 1;
+  if(progress > 0.86) scale = 1 - (progress - 0.86) / 0.14 * 0.6; // 0.4→1
+  else if(progress < 0.22) scale = progress / 0.22;
+  const alpha = Math.min(1, progress < 0.22 ? progress/0.22 : 1);
+
+  cx.save();
+  // Dark vignette behind horse
+  cx.globalAlpha = alpha * 0.72;
+  cx.fillStyle = '#000';
+  cx.fillRect(0,0,W,H);
+  cx.globalAlpha = alpha;
+
+  // Scale around center-bottom of horse
+  const hx = W/2, hy = H*0.78;
+  cx.translate(hx, hy);
+  cx.scale(scale * 2.2, scale * 2.2);   // 2.2× bigger than normal
+  cx.translate(-hx, -hy);
+
+  // Draw the laughing horse at center of screen
+  drawHorseLarge(hx, hy);
+
+  cx.restore();
+
+  // "¡JA JA JA!" speech bubble — drawn after restore so it stays at screen coords
+  if(progress > 0.2){
+    const bubbleAlpha = Math.min(1, alpha);
+    cx.save();
+    cx.globalAlpha = bubbleAlpha;
+    const bounce = Math.sin(frame * 0.4) * 6;
+    // Bubble
+    const bx = W/2 + 90, by = H*0.18 + bounce;
+    rr(bx-70, by-28, 140, 46, 14, '#fff', '#FFD700', 3);
+    // Tail of bubble
+    cx.fillStyle='#fff';
+    cx.beginPath(); cx.moveTo(bx-30,by+18); cx.lineTo(bx-60,by+40); cx.lineTo(bx-10,by+18); cx.fill();
+    cx.strokeStyle='#FFD700'; cx.lineWidth=2;
+    cx.beginPath(); cx.moveTo(bx-30,by+18); cx.lineTo(bx-60,by+40); cx.stroke();
+    cx.beginPath(); cx.moveTo(bx-10,by+18); cx.lineTo(bx-60,by+40); cx.stroke();
+    // Text cycles: ¡JA! / HA HA / HEE HEE
+    const msgs=['¡JA JA!','HA HA!','¡JE JE!'];
+    const msg = msgs[Math.floor(frame/18)%3];
+    cx.fillStyle='#8B0000';
+    cx.font="bold 22px 'Fredoka One',cursive";
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(msg, bx, by);
+    cx.restore();
+  }
+}
+
+// Separate large horse draw (centered, always laughing)
+function drawHorseLarge(x, y){
+  const b = Math.sin(horseAnim * 3) * 9;
+  const legA = Math.sin(horseAnim * 3) * 25;
+
+  // Shadow
+  cx.fillStyle='rgba(0,0,0,0.25)';
+  cx.beginPath(); cx.ellipse(x, y+5, 38, 8, 0, 0, 6.28); cx.fill();
+
+  // Tail
+  cx.strokeStyle='#6b3a00'; cx.lineWidth=5;
+  cx.beginPath(); cx.moveTo(x+48,y-30); cx.quadraticCurveTo(x+72,y-10,x+65,y+10); cx.stroke();
+  cx.strokeStyle='#8a5000'; cx.lineWidth=2;
+  cx.beginPath(); cx.moveTo(x+48,y-30); cx.quadraticCurveTo(x+74,y-5,x+66,y+15); cx.stroke();
+
+  // Legs
+  cx.fillStyle='#5a3000';
+  for(const [lx,la] of [[-28,legA],[-12,-legA],[8,legA],[24,-legA]]){
+    cx.save(); cx.translate(x+lx,y+b); cx.rotate(la*Math.PI/180);
+    cx.fillRect(-4,0,8,28); cx.fillStyle='#3a1a00'; cx.fillRect(-5,24,10,6); cx.restore();
+  }
+
+  // Body
+  cx.fillStyle='#8B4513'; cx.beginPath(); cx.ellipse(x,y-16+b,46,22,0.1,0,6.28); cx.fill();
+  cx.fillStyle='#a05020'; cx.beginPath(); cx.ellipse(x-8,y-20+b,38,18,0.05,0,6.28); cx.fill();
+
+  // Neck
+  cx.fillStyle='#8B4513';
+  cx.beginPath(); cx.moveTo(x-28,y-30+b); cx.lineTo(x-42,y-52+b);
+  cx.lineTo(x-34,y-54+b); cx.lineTo(x-18,y-28+b); cx.fill();
+
+  // Head
+  cx.fillStyle='#8B4513'; cx.beginPath(); cx.ellipse(x-52,y-56+b,18,11,0.3,0,6.28); cx.fill();
+  cx.fillStyle='#a05020'; cx.beginPath(); cx.ellipse(x-64,y-52+b,10,7,-0.1,0,6.28); cx.fill();
+
+  // Open laughing mouth
+  cx.fillStyle='#3a1000'; cx.beginPath(); cx.ellipse(x-66,y-48+b,8,7,0,0,6.28); cx.fill();
+  cx.fillStyle='#fff'; cx.fillRect(x-72,y-53+b,6,5); cx.fillRect(x-65,y-53+b,6,5);
+
+  // Laugh tears
+  cx.fillStyle='rgba(120,200,255,0.95)';
+  cx.beginPath(); cx.ellipse(x-44,y-62+b,3,6,0.3,0,6.28); cx.fill();
+  cx.beginPath(); cx.ellipse(x-44,y-54+b,2,4,0.2,0,6.28); cx.fill();
+
+  // Eyes squinting (X shape)
+  cx.strokeStyle='#1a0a00'; cx.lineWidth=3;
+  cx.beginPath(); cx.moveTo(x-52,y-64+b); cx.lineTo(x-44,y-56+b); cx.stroke();
+  cx.beginPath(); cx.moveTo(x-44,y-64+b); cx.lineTo(x-52,y-56+b); cx.stroke();
+
+  // Ear
+  cx.fillStyle='#7a3a00'; cx.beginPath();
+  cx.moveTo(x-42,y-62+b); cx.lineTo(x-38,y-74+b); cx.lineTo(x-34,y-62+b); cx.fill();
+
+  // Mane
+  cx.fillStyle='#5a2a00';
+  for(let i=0;i<5;i++){ cx.beginPath(); cx.arc(x-40+i*3,y-65-i*2+b,5,0,6.28); cx.fill(); }
+
+  // Bridle
+  cx.strokeStyle='#FFD700'; cx.lineWidth=2;
+  cx.beginPath(); cx.moveTo(x-58,y-58+b); cx.lineTo(x-44,y-62+b); cx.lineTo(x-40,y-50+b); cx.stroke();
+
+  // Saddle
+  cx.fillStyle='#5a2a00'; cx.beginPath(); cx.ellipse(x-5,y-36+b,18,8,0,0,6.28); cx.fill();
+  rr(x-16,y-45+b,22,10,4,'#6b3500');
+}
 function drawSign(){
   if(!q) return;
   const sx=W/2, sy=80;
@@ -705,7 +827,7 @@ function handleAnswer(idx){
     playSound(false);
     levelWrong++;
     lives--;
-    horseLaughing = 130; // ~2 seconds of laughing
+    horseLaughing = LAUGH_TOTAL; // big laugh overlay
     // Highlight correct
     document.getElementById('a'+q.correctIdx).className='abtn correct';
   }
@@ -818,10 +940,12 @@ function update(){
 function render(){
   cx.clearRect(0,0,W,H);
   cx.textAlign='left';
-  if(gs==='start')    { drawStart(); return; }
-  if(gs==='gameOver') { drawGameOver(); return; }
-  if(gs==='win')      { drawWin(); return; }
-  drawPlaying();
+  if(gs==='start')    { drawStart(); }
+  else if(gs==='gameOver') { drawGameOver(); }
+  else if(gs==='win')      { drawWin(); }
+  else { drawPlaying(); }
+  // Always draw laugh overlay on top if active
+  drawLaughOverlay();
 }
 
 // ── Controls ──────────────────────────────────────
