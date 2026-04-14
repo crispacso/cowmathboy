@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🤠 CowMathBoy</title>
+<link href="https://fonts.googleapis.com/css2?family=Rye&family=Fredoka+One&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#1a0a00;
+  display:flex; align-items:flex-start; justify-content:center;
+  min-height:100vh; padding:16px 8px;
+  font-family:'Fredoka One','Arial Rounded MT Bold',cursive;
+}
+#wrap { position:relative; width:100%; max-width:780px; }
+canvas { display:block; width:100%; height:auto; }
+#ui {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  display:none; flex-direction:column;
+  align-items:center; justify-content:center;
+  pointer-events:none; z-index:10;
+}
+#answers {
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:14px; pointer-events:all; margin-top:10px;
+}
+.abtn {
+  font-family:'Fredoka One',cursive;
+  font-size:28px; padding:14px 30px;
+  background:#8B4513; color:#FFE4B5;
+  border:4px solid #5C2E00;
+  border-radius:10px; cursor:pointer;
+  box-shadow:4px 4px 0 #3a1a00;
+  transition:transform .08s, box-shadow .08s, background .1s;
+  min-width:130px; text-align:center;
+  position:relative;
+}
+.abtn:hover { background:#a05020; transform:translate(-2px,-2px); box-shadow:6px 6px 0 #3a1a00; }
+.abtn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 #3a1a00; }
+.abtn.correct { background:#3a8a1a; border-color:#1a5a00; animation:popIn .3s; }
+.abtn.wrong   { background:#aa2010; border-color:#7a0000; animation:shake .3s; }
+@keyframes popIn { 0%{transform:scale(1)} 50%{transform:scale(1.18)} 100%{transform:scale(1)} }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)} }
+#msgOverlay {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.72);
+  display:none; flex-direction:column;
+  align-items:center; justify-content:center;
+  z-index:20; pointer-events:all;
+}
+#msgBox {
+  background:#2a1200;
+  border:6px solid #c8860a;
+  border-radius:18px; padding:30px 40px;
+  text-align:center; max-width:460px;
+  box-shadow:0 0 0 3px #2a1200, 0 0 0 8px rgba(200,134,10,0.2);
+}
+#msgTitle { font-family:'Rye',serif; font-size:30px; color:#FFD700; margin-bottom:12px; text-shadow:2px 2px 0 #5a2a00; }
+#msgSub   { font-size:18px; color:#FFE4B5; margin-bottom:20px; line-height:1.5; }
+#msgBtn {
+  font-family:'Fredoka One',cursive;
+  font-size:20px; padding:12px 36px;
+  background:#c8860a; color:#1a0800;
+  border:4px solid #8a5a00; border-radius:10px;
+  cursor:pointer; box-shadow:4px 4px 0 #5a3a00;
+  transition:transform .08s, box-shadow .08s;
+}
+#msgBtn:hover { transform:translate(-2px,-2px); box-shadow:6px 6px 0 #5a3a00; }
+#msgBtn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 #5a3a00; }
+#tinfo {
+  background:#1a0800; border:2px solid #4a2a00;
+  font-size:11px; color:#8a5a20;
+  text-align:center; padding:5px;
+  font-family:'Fredoka One',cursive; letter-spacing:1px;
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv" width="780" height="360"></canvas>
+  <!-- Answer buttons overlay -->
+  <div id="ui">
+    <div id="answers">
+      <button class="abtn" id="a0">?</button>
+      <button class="abtn" id="a1">?</button>
+      <button class="abtn" id="a2">?</button>
+      <button class="abtn" id="a3">?</button>
+    </div>
+  </div>
+  <!-- Message overlay -->
+  <div id="msgOverlay">
+    <div id="msgBox">
+      <div id="msgTitle">YEEHAW!</div>
+      <div id="msgSub">Texto</div>
+      <button id="msgBtn">¡Vamos!</button>
+    </div>
+  </div>
+  <div id="tinfo">Tablas activas: × 1 × 2</div>
+</div>
+
+<script>
+const cv=document.getElementById('cv');
+const cx=cv.getContext('2d');
+const W=780, H=360;
+
+// ── State ───────────────────────────────────────
+let gs='start'; // start|playing|question|feedback|levelDone|gameOver|win
+let lv=1, lives=3, score=0, frame=0, scroll=0;
+let q=null, qAnswered=false;
+let correct=0; const NEED=5; // 5 correct per level
+let feedback={active:false,correct:false,timer:0,chosen:-1};
+let parts=[];
+let horseAnim=0; // horse bobbing
+let lastWrong=0, levelWrong=0;
+
+// ── Tables ──────────────────────────────────────
+function getTables(l){
+  if(l<=2)  return [1,2,3];
+  if(l<=4)  return [2,3,4];
+  if(l<=6)  return [3,4,5];
+  if(l<=8)  return [4,5,6];
+  if(l<=10) return [5,6,7];
+  if(l<=13) return [6,7,8];
+  if(l<=16) return [7,8,9];
+  return [8,9,10];
+}
+
+function mkQ(l){
+  const t=getTables(l);
+  const a=t[Math.random()*t.length|0];
+  const b=1+(Math.random()*10|0);
+  const ans=a*b;
+  // Generate 3 wrong answers (distinct, plausible, 1-100)
+  const wrongs=new Set();
+  while(wrongs.size<3){
+    let w;
+    const r=Math.random();
+    if(r<0.4) w=ans+([-1,1,2,-2,10,-10][Math.random()*6|0]);
+    else if(r<0.7) w=a*(b+(Math.random()<0.5?1:-1));
+    else w=t[Math.random()*t.length|0]*(1+(Math.random()*10|0));
+    if(w!==ans && w>=1 && w<=100) wrongs.add(w);
+  }
+  const opts=[ans,...wrongs];
+  // Shuffle
+  for(let i=opts.length-1;i>0;i--){const j=Math.random()*i|0;[opts[i],opts[j]]=[opts[j],opts[i]];}
+  return {a,b,ans,opts,correctIdx:opts.indexOf(ans)};
+}
+
+// ── Particles ───────────────────────────────────
+function spawnParts(x,y,colors,n=12){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*6.28, sp=2+Math.random()*5;
+    const col=colors[Math.random()*colors.length|0];
+    parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,col,r:3+Math.random()*4,life:40+Math.random()*20|0,max:60});
+  }
+}
+function updateParts(){
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.18; p.life--;
+    if(p.life<=0) parts.splice(i,1);
+  }
+}
+function drawParts(){
+  for(const p of parts){
+    cx.globalAlpha=p.life/p.max;
+    cx.fillStyle=p.col;
+    cx.beginPath(); cx.arc(p.x,p.y,p.r,0,6.28); cx.fill();
+  }
+  cx.globalAlpha=1;
+}
+
+// ── Drawing helpers ──────────────────────────────
+function rr(x,y,w,h,r,fill,stroke,sw=2){
+  cx.beginPath(); cx.roundRect(x,y,w,h,r);
+  if(fill){cx.fillStyle=fill;cx.fill();}
+  if(stroke){cx.strokeStyle=stroke;cx.lineWidth=sw;cx.stroke();}
+}
+function ct(txt,y,fs,col,font,xa){
+  cx.save(); cx.fillStyle=col;
+  cx.font=`${fs}px ${font||"'Fredoka One',cursive"}`;
+  cx.textAlign=xa||'center'; cx.fillText(txt,W/2+(xa?-W/2+20:0),y);
+  cx.restore();
+}
+
+// ── Sky & Landscape ─────────────────────────────
+function drawSky(){
+  const sunsetR=Math.min(1,(lv-1)/12);
+  const r1=`hsl(${40-sunsetR*20},${90-sunsetR*30}%,${75-sunsetR*30}%)`;
+  const r2=`hsl(${20-sunsetR*15},${80-sunsetR*20}%,${45-sunsetR*15}%)`;
+  const gr=cx.createLinearGradient(0,0,0,H*0.62);
+  gr.addColorStop(0,r1); gr.addColorStop(1,r2);
+  cx.fillStyle=gr; cx.fillRect(0,0,W,H*0.62);
+
+  // Sun
+  const sunCol=lv>12?'#ff8822':'#FFD700';
+  cx.save();
+  cx.shadowColor=sunCol; cx.shadowBlur=30;
+  cx.fillStyle=sunCol;
+  cx.beginPath(); cx.arc(W*0.8,70,32,0,6.28); cx.fill();
+  cx.restore();
+
+  // Clouds
+  drawCloud(((scroll*0.06+200)%(W+200))-200,48,1.1);
+  drawCloud(((scroll*0.04+450)%(W+200))-100,68,0.8);
+  drawCloud(((scroll*0.05+700)%(W+200))-200,38,1.3);
+}
+
+function drawCloud(x,y,s){
+  cx.fillStyle='rgba(255,255,255,0.85)';
+  for(const [dx,dy,r] of [[0,0,20],[22,0,26],[46,0,22],[-12,10,18],[60,10,18]]){
+    cx.beginPath(); cx.arc(x+dx*s,y+dy*s,r*s,0,6.28); cx.fill();
+  }
+}
+
+function drawDesert(){
+  const gy=H*0.62;
+  // Ground gradient
+  const gr=cx.createLinearGradient(0,gy,0,H);
+  gr.addColorStop(0,'#c8830a'); gr.addColorStop(0.4,'#a06008'); gr.addColorStop(1,'#7a4a04');
+  cx.fillStyle=gr; cx.fillRect(0,gy,W,H-gy);
+
+  // Sand texture stripes
+  cx.strokeStyle='rgba(0,0,0,0.08)'; cx.lineWidth=1;
+  for(let i=0;i<8;i++){
+    const sy=gy+20+i*14;
+    cx.beginPath(); cx.moveTo(0,sy); cx.lineTo(W,sy+4); cx.stroke();
+  }
+
+  // Cacti (parallax)
+  for(let i=0;i<5;i++){
+    const cx2=((i*180-scroll*0.3+900)%(W+180))-90;
+    drawCactus(cx2, gy);
+  }
+
+  // Ground rocks
+  cx.fillStyle='#7a4a00';
+  for(let i=0;i<12;i++){
+    const rx=((i*67+scroll*0.7)%(W+60))-30;
+    const ry=gy+4+((i*31)%18);
+    cx.beginPath(); cx.ellipse(rx,ry,8+i%5,4,0,0,6.28); cx.fill();
+  }
+}
+
+function drawCactus(x,gy){
+  cx.fillStyle='#2d7a2d';
+  cx.fillRect(x-7,gy-55,14,55);
+  cx.fillRect(x-22,gy-42,15,10); cx.fillRect(x-22,gy-52,10,10);
+  cx.fillRect(x+7,gy-38,15,10); cx.fillRect(x+12,gy-48,10,10);
+  cx.fillStyle='#1a5a1a';
+  cx.fillRect(x-5,gy-55,4,55);
+}
+
+// ── Mesa / rocks in background ───────────────────
+function drawMesas(){
+  const gy=H*0.62;
+  cx.fillStyle='#8B4513';
+  // Mesa 1
+  const mx1=((scroll*0.15+100)%(W+400))-400;
+  cx.beginPath(); cx.moveTo(mx1,gy); cx.lineTo(mx1+30,gy-80);
+  cx.lineTo(mx1+140,gy-80); cx.lineTo(mx1+170,gy); cx.fill();
+  // Mesa 2
+  const mx2=((scroll*0.12+500)%(W+400))-200;
+  cx.fillStyle='#a0522d';
+  cx.beginPath(); cx.moveTo(mx2,gy); cx.lineTo(mx2+20,gy-55);
+  cx.lineTo(mx2+110,gy-55); cx.lineTo(mx2+130,gy); cx.fill();
+}
+
+// ── Cowboy (from behind) ─────────────────────────
+function drawCowboy(x,y){
+  const bob=Math.sin(frame*0.14)*2.5;
+  const run=gs==='playing'||gs==='question'||gs==='feedback';
+  const legSwing=run?Math.sin(frame*0.22)*10:0;
+
+  // Shadow
+  cx.fillStyle='rgba(0,0,0,0.25)';
+  cx.beginPath(); cx.ellipse(x,y+2,20,5,0,0,6.28); cx.fill();
+
+  // Boots
+  cx.fillStyle='#3a1a00';
+  cx.fillRect(x-12,y-16+Math.abs(legSwing)*0.3,10,16);
+  cx.fillRect(x+2, y-16-Math.abs(legSwing)*0.3,10,16);
+  // Boot tips
+  cx.fillRect(x-15,y-4,7,5); cx.fillRect(x+8,y-4,7,5);
+
+  // Pants
+  cx.fillStyle='#4a3090';
+  cx.beginPath();
+  cx.moveTo(x-12,y-16); cx.lineTo(x-12,y-44);
+  cx.lineTo(x+2, y-44); cx.lineTo(x+2, y-16+legSwing);
+  cx.fill();
+  cx.beginPath();
+  cx.moveTo(x+2, y-44); cx.lineTo(x+12,y-44);
+  cx.lineTo(x+12,y-16-legSwing); cx.lineTo(x+2, y-16);
+  cx.fill();
+  // Belt
+  cx.fillStyle='#5a3010'; cx.fillRect(x-12,y-44,24,5);
+  cx.fillStyle='#FFD700'; cx.fillRect(x-3,y-45,6,7);// buckle
+
+  // Shirt / vest (back view)
+  cx.fillStyle='#c8500a';
+  rr(x-12,y-72+bob,24,30,4,'#c8500a');
+  // Vest darker stripe
+  cx.fillStyle='#8a3800';
+  cx.fillRect(x-4,y-72+bob,8,28);
+
+  // Arms with gun hand
+  cx.fillStyle='#d4884a'; // skin
+  // Left arm
+  cx.fillRect(x-18,y-68+bob,7,22);
+  // Right arm raised (holding gun up)
+  cx.fillRect(x+11,y-72+bob,7,18);
+  // Gun
+  cx.fillStyle='#222';
+  cx.fillRect(x+14,y-82+bob,5,16);
+  cx.fillRect(x+10,y-78+bob,12,5);
+  // Smoke puff if just fired
+  if(feedback.active&&feedback.correct){
+    cx.fillStyle='rgba(200,200,200,0.6)';
+    cx.beginPath(); cx.arc(x+18,y-85+bob,6+Math.random()*4,0,6.28); cx.fill();
+  }
+
+  // Neck / back of head (skin)
+  cx.fillStyle='#d4884a';
+  cx.fillRect(x-5,y-82+bob,10,14);
+
+  // Hat brim
+  cx.fillStyle='#5a2d00';
+  rr(x-22,y-90+bob,44,6,2,'#5a2d00');
+  // Hat crown
+  rr(x-13,y-118+bob,26,30,3,'#6b3500');
+  // Hat band
+  cx.fillStyle='#FFD700'; cx.fillRect(x-13,y-92+bob,26,5);
+  // Hat highlight
+  cx.fillStyle='rgba(255,255,255,0.12)';
+  cx.fillRect(x-10,y-116+bob,8,20);
+
+  // Star on belt
+  cx.fillStyle='#FFD700'; cx.font='10px serif';
+  cx.textAlign='center'; cx.fillText('★',x,y-41);
+}
+
+// ── Horse ────────────────────────────────────────
+function drawHorse(x,y){
+  horseAnim+=0.12;
+  const b=Math.sin(horseAnim)*5;
+  const legA=Math.sin(horseAnim)*18;
+
+  // Shadow
+  cx.fillStyle='rgba(0,0,0,0.2)';
+  cx.beginPath(); cx.ellipse(x,y+5,38,8,0,0,6.28); cx.fill();
+
+  // Tail
+  cx.strokeStyle='#6b3a00'; cx.lineWidth=5;
+  cx.beginPath(); cx.moveTo(x+48,y-30);
+  cx.quadraticCurveTo(x+72,y-10,x+65,y+10); cx.stroke();
+  cx.strokeStyle='#8a5000'; cx.lineWidth=2;
+  cx.beginPath(); cx.moveTo(x+48,y-30);
+  cx.quadraticCurveTo(x+74,y-5,x+66,y+15); cx.stroke();
+
+  // Legs (4)
+  cx.fillStyle='#5a3000';
+  const legs=[[-28,3,legA],[-12,3,-legA],[8,3,legA],[24,3,-legA]];
+  for(const [lx,,la] of legs){
+    const ly=y+b;
+    cx.save(); cx.translate(x+lx,ly); cx.rotate(la*Math.PI/180);
+    cx.fillRect(-4,0,8,28); cx.fillStyle='#3a1a00'; cx.fillRect(-5,24,10,6); cx.restore();
+  }
+
+  // Body
+  cx.fillStyle='#8B4513';
+  cx.beginPath(); cx.ellipse(x,y-16+b,46,22,0.1,0,6.28); cx.fill();
+  cx.fillStyle='#a05020';
+  cx.beginPath(); cx.ellipse(x-8,y-20+b,38,18,0.05,0,6.28); cx.fill();
+
+  // Neck
+  cx.fillStyle='#8B4513';
+  cx.beginPath(); cx.moveTo(x-28,y-30+b); cx.lineTo(x-42,y-52+b);
+  cx.lineTo(x-34,y-54+b); cx.lineTo(x-18,y-28+b); cx.fill();
+
+  // Head
+  cx.fillStyle='#8B4513';
+  cx.beginPath(); cx.ellipse(x-52,y-56+b,18,11,0.3,0,6.28); cx.fill();
+  // Snout
+  cx.fillStyle='#a05020';
+  cx.beginPath(); cx.ellipse(x-64,y-52+b,10,7,-0.1,0,6.28); cx.fill();
+  // Nostril
+  cx.fillStyle='#3a1a00'; cx.beginPath(); cx.ellipse(x-68,y-50+b,3,2,0,0,6.28); cx.fill();
+  // Eye
+  cx.fillStyle='#1a0a00'; cx.beginPath(); cx.arc(x-48,y-60+b,3.5,0,6.28); cx.fill();
+  cx.fillStyle='#fff'; cx.beginPath(); cx.arc(x-47,y-61+b,1.2,0,6.28); cx.fill();
+  // Ear
+  cx.fillStyle='#7a3a00'; cx.beginPath();
+  cx.moveTo(x-42,y-62+b); cx.lineTo(x-38,y-74+b); cx.lineTo(x-34,y-62+b); cx.fill();
+  // Mane
+  cx.fillStyle='#5a2a00';
+  for(let i=0;i<5;i++){
+    const mx=-40+i*3, my=-65-i*2;
+    cx.beginPath(); cx.arc(x+mx,y+my+b,5,0,6.28); cx.fill();
+  }
+  // Bridle
+  cx.strokeStyle='#FFD700'; cx.lineWidth=2;
+  cx.beginPath(); cx.moveTo(x-58,y-58+b); cx.lineTo(x-44,y-62+b); cx.lineTo(x-40,y-50+b); cx.stroke();
+  // Saddle
+  cx.fillStyle='#5a2a00';
+  cx.beginPath(); cx.ellipse(x-5,y-36+b,18,8,0,0,6.28); cx.fill();
+  rr(x-16,y-45+b,22,10,4,'#6b3500');
+}
+
+// ── Sign / Billboard ──────────────────────────────
+function drawSign(){
+  if(!q) return;
+  const sx=W/2, sy=80;
+  // Posts
+  cx.fillStyle='#5a3010';
+  cx.fillRect(sx-10,sy+60,8,55); cx.fillRect(sx+2,sy+60,8,55);
+  // Board
+  rr(sx-100,sy-10,200,72,8,'#DEB887','#5a2a00',4);
+  // Wood grain lines
+  cx.strokeStyle='rgba(100,60,0,0.18)'; cx.lineWidth=1.5;
+  for(let i=0;i<5;i++){
+    cx.beginPath(); cx.moveTo(sx-98,sy-6+i*14); cx.lineTo(sx+98,sy-4+i*14); cx.stroke();
+  }
+  // Decorative nails
+  cx.fillStyle='#666';
+  for(const [nx,ny] of [[-90,-2],[88,-2],[-90,58],[88,58]]){
+    cx.beginPath(); cx.arc(sx+nx,sy+ny,4,0,6.28); cx.fill();
+  }
+  // Question text
+  cx.save();
+  cx.fillStyle='#3a1a00';
+  cx.font="bold 38px 'Rye',serif";
+  cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillText(`${q.a} × ${q.b} = ?`,sx,sy+26);
+  cx.restore();
+}
+
+// ── HUD ──────────────────────────────────────────
+function drawHUD(){
+  cx.fillStyle='rgba(20,8,0,0.82)';
+  cx.fillRect(0,0,W,42);
+  cx.strokeStyle='#8B4513'; cx.lineWidth=2;
+  cx.beginPath(); cx.moveTo(0,42); cx.lineTo(W,42); cx.stroke();
+
+  // Lives (stars)
+  cx.font="22px serif"; cx.textAlign='left';
+  cx.fillText('🤠',10,30);
+  for(let i=0;i<3;i++){
+    cx.fillStyle=i<lives?'#FFD700':'#3a2a00';
+    cx.font="18px serif"; cx.fillText('★',54+i*24,28);
+  }
+
+  // Level
+  cx.fillStyle='#FFD700'; cx.font="16px 'Rye',serif"; cx.textAlign='center';
+  cx.fillText(`NIVEL ${lv}/20`,W/2,28);
+
+  // Progress (bullets)
+  cx.textAlign='right'; cx.font="16px serif";
+  cx.fillStyle='#aaa'; cx.fillText('Disparos:',W-130,28);
+  for(let i=0;i<NEED;i++){
+    cx.fillStyle=i<correct?'#FFD700':'#3a2a00';
+    cx.fillText('🔫',W-108+i*22,28);
+  }
+  // Score
+  cx.fillStyle='#c8860a'; cx.font="13px 'Fredoka One',cursive"; cx.textAlign='right';
+  cx.fillText(`${score} pts`,W-8,14);
+  cx.textAlign='left';
+}
+
+// ── Screen renderers ─────────────────────────────
+function drawStart(){
+  drawSky(); drawMesas(); drawDesert();
+  // Title board
+  const ty=50;
+  rr(W/2-190,ty,380,90,12,'#8B4513','#5a2a00',5);
+  cx.fillStyle='rgba(0,0,0,0.2)'; cx.fillRect(W/2-186,ty+4,376,82);
+  cx.fillStyle='#FFD700'; cx.font="46px 'Rye',serif"; cx.textAlign='center';
+  cx.fillText('CowMathBoy',W/2+2,ty+58);
+  cx.fillStyle='#FFF8DC'; cx.font="46px 'Rye',serif";
+  cx.fillText('CowMathBoy',W/2,ty+56);
+  cx.fillStyle='#c8860a'; cx.font="16px 'Fredoka One',cursive";
+  cx.fillText('¡Tablas multiplicar del Viejo Oeste!',W/2,ty+80);
+
+  drawHorse(580,270);
+  drawCowboy(200,300);
+  drawParts();
+
+  if((frame/28|0)%2===0){
+    rr(W/2-180,H-66,360,36,8,'rgba(0,0,0,0.6)');
+    cx.fillStyle='#fff'; cx.font="17px 'Fredoka One',cursive"; cx.textAlign='center';
+    cx.fillText('🤠  Haz CLICK o pulsa ESPACIO para empezar  🤠',W/2,H-42);
+  }
+}
+
+function drawPlaying(){
+  drawSky(); drawMesas(); drawDesert();
+  drawHorse(580,268);
+  drawSign();
+  drawCowboy(150,295);
+  drawParts();
+  drawHUD();
+}
+
+function drawGameOver(){
+  drawSky(); drawMesas(); drawDesert();
+  drawCowboy(W/2,300);
+  cx.fillStyle='rgba(0,0,0,0.7)'; cx.fillRect(0,0,W,H);
+  cx.fillStyle='#ff3333'; cx.font="52px 'Rye',serif"; cx.textAlign='center';
+  cx.fillText('GAME OVER',W/2,H/2-30);
+  cx.fillStyle='#FFE4B5'; cx.font="22px 'Fredoka One',cursive";
+  cx.fillText(`Llegaste al nivel ${lv}/20 · ${score} pts`,W/2,H/2+16);
+  if((frame/28|0)%2===0){ cx.fillStyle='#fff'; cx.font="16px 'Fredoka One',cursive"; cx.fillText('CLICK o ESPACIO para reintentar',W/2,H/2+54); }
+}
+
+function drawWin(){
+  drawSky(); drawMesas(); drawDesert();
+  drawHorse(580,268); drawCowboy(150,295);
+  if(frame%6===0) spawnParts(80+Math.random()*620,100+Math.random()*100,['#FFD700','#ff6688','#88aaff','#88ffaa','#ffaa44'],5);
+  drawParts();
+  cx.fillStyle='rgba(0,0,0,0.6)'; cx.fillRect(0,0,W,H);
+  cx.fillStyle='#FFD700'; cx.font="46px 'Rye',serif"; cx.textAlign='center';
+  cx.fillText('¡SHERIFF MAESTRO!',W/2,H/2-36);
+  cx.fillStyle='#FFF8DC'; cx.font="20px 'Fredoka One',cursive";
+  cx.fillText('¡Superaste los 20 niveles!',W/2,H/2+10);
+  cx.fillStyle='#c8860a'; cx.font="18px 'Fredoka One',cursive";
+  cx.fillText(`Puntuacion final: ${score} pts`,W/2,H/2+38);
+  if((frame/28|0)%2===0){ cx.fillStyle='#fff'; cx.font="15px 'Fredoka One',cursive"; cx.fillText('CLICK o ESPACIO para jugar de nuevo',W/2,H/2+70); }
+}
+
+// ── Question UI ──────────────────────────────────
+function showQuestion(){
+  if(!q) return;
+  const ui=document.getElementById('ui');
+  ui.style.display='flex';
+  // Position answers in lower half
+  ui.style.justifyContent='flex-end';
+  ui.style.paddingBottom='28px';
+  ui.style.paddingLeft='0';
+  ui.style.paddingRight='0';
+
+  for(let i=0;i<4;i++){
+    const btn=document.getElementById('a'+i);
+    btn.textContent=q.opts[i];
+    btn.className='abtn';
+    btn.disabled=false;
+  }
+}
+
+function hideQuestion(){
+  document.getElementById('ui').style.display='none';
+}
+
+function handleAnswer(idx){
+  if(qAnswered) return;
+  qAnswered=true;
+  const isOk=idx===q.correctIdx;
+  const btn=document.getElementById('a'+idx);
+  btn.className='abtn '+(isOk?'correct':'wrong');
+  // Disable all
+  for(let i=0;i<4;i++) document.getElementById('a'+i).disabled=true;
+
+  if(isOk){
+    playSound(true);
+    correct++;
+    score+=Math.max(30,80+(lv-1)*8);
+    spawnParts(W/2,160,['#FFD700','#ff4','#fff','#ffaa44'],20);
+    spawnParts(165,210,['#FFD700','#ff4','#fff'],8);
+  } else {
+    playSound(false);
+    levelWrong++;
+    lives--;
+    // Highlight correct
+    document.getElementById('a'+q.correctIdx).className='abtn correct';
+  }
+
+  feedback={active:true,correct:isOk,timer:80,chosen:idx};
+  gs='feedback';
+}
+
+// ── Message overlay ──────────────────────────────
+function showMsg(title,sub,btn,cb){
+  const ov=document.getElementById('msgOverlay');
+  document.getElementById('msgTitle').textContent=title;
+  document.getElementById('msgSub').textContent=sub;
+  document.getElementById('msgBtn').textContent=btn;
+  ov.style.display='flex';
+  document.getElementById('msgBtn').onclick=()=>{
+    ov.style.display='none'; cb();
+  };
+}
+function hideMsg(){ document.getElementById('msgOverlay').style.display='none'; }
+
+// ── Audio ─────────────────────────────────────────
+let ac=null;
+function getAC(){ if(!ac) ac=new(window.AudioContext||window.webkitAudioContext)(); return ac; }
+function playSound(ok){
+  try{
+    const a=getAC();
+    if(ok){
+      [440,554,659,880].forEach((f,i)=>{
+        const o=a.createOscillator(),g=a.createGain();
+        o.connect(g); g.connect(a.destination);
+        o.frequency.value=f; o.type='triangle';
+        const t=a.currentTime+i*0.07;
+        g.gain.setValueAtTime(0.08,t); g.gain.linearRampToValueAtTime(0,t+0.12);
+        o.start(t); o.stop(t+0.14);
+      });
+    } else {
+      const o=a.createOscillator(),g=a.createGain();
+      o.connect(g); g.connect(a.destination);
+      o.frequency.setValueAtTime(300,a.currentTime);
+      o.frequency.linearRampToValueAtTime(80,a.currentTime+0.4);
+      o.type='sawtooth';
+      g.gain.setValueAtTime(0.1,a.currentTime); g.gain.linearRampToValueAtTime(0,a.currentTime+0.4);
+      o.start(); o.stop(a.currentTime+0.42);
+    }
+  }catch(e){}
+}
+
+// ── Level flow ────────────────────────────────────
+function startGame(){
+  lv=1; lives=3; score=0; correct=0; levelWrong=0; lastWrong=0; parts=[];
+  frame=0; scroll=0; gs='playing';
+  nextQuestion();
+  updateTableInfo();
+}
+
+function nextQuestion(){
+  q=mkQ(lv); qAnswered=false;
+  gs='question';
+  showQuestion();
+}
+
+function nextLevel(){
+  lastWrong=levelWrong; levelWrong=0; correct=0;
+  lv++;
+  if(lv>20){ gs='win'; hideQuestion(); return; }
+  parts=[];
+  gs='playing';
+  nextQuestion();
+  updateTableInfo();
+}
+
+function updateTableInfo(){
+  const t=getTables(lv);
+  document.getElementById('tinfo').textContent=
+    'Tablas activas: '+t.map(n=>'× '+n).join('  ');
+}
+
+// ── Update ────────────────────────────────────────
+function update(){
+  frame++;
+  if(gs==='playing'||gs==='question'||gs==='feedback') scroll+=1.2;
+  else scroll+=0.3;
+  updateParts();
+
+  if(gs==='feedback'){
+    feedback.timer--;
+    if(feedback.timer<=0){
+      feedback.active=false;
+      hideQuestion();
+      if(lives<=0){ gs='gameOver'; return; }
+      if(correct>=NEED){
+        // Level done
+        const stars=levelWrong===0?'⭐⭐⭐':levelWrong<=2?'⭐⭐':'⭐';
+        showMsg(
+          lv>=20?'¡ÚLTIMO NIVEL!':'¡NIVEL SUPERADO!',
+          `${stars}\n¡Bien hecho, cowboy!\nPuntuacion: ${score}`,
+          lv>=20?'¡Al final!':'¡Siguiente nivel! →',
+          nextLevel
+        );
+        gs='levelDone';
+      } else {
+        nextQuestion();
+      }
+    }
+  }
+}
+
+// ── Render ────────────────────────────────────────
+function render(){
+  cx.clearRect(0,0,W,H);
+  cx.textAlign='left';
+  if(gs==='start')    { drawStart(); return; }
+  if(gs==='gameOver') { drawGameOver(); return; }
+  if(gs==='win')      { drawWin(); return; }
+  drawPlaying();
+}
+
+// ── Controls ──────────────────────────────────────
+function globalAction(){
+  if(gs==='start')   { startGame(); return; }
+  if(gs==='gameOver'||gs==='win') { startGame(); return; }
+}
+
+cv.addEventListener('click', globalAction);
+document.addEventListener('keydown', e=>{
+  if(e.code==='Space'){ e.preventDefault(); globalAction(); }
+  if(e.code==='Escape'){
+    if(gs!=='start'){
+      // Cancel any active overlays
+      hideQuestion();
+      hideMsg();
+      parts=[];
+      gs='start';
+    }
+  }
+});
+
+for(let i=0;i<4;i++){
+  document.getElementById('a'+i).addEventListener('click',()=>handleAnswer(i));
+}
+
+// ── Loop ──────────────────────────────────────────
+(function loop(){ update(); render(); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>
